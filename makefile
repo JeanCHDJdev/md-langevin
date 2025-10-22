@@ -2,7 +2,6 @@
 
 ENV_NAME = md-langevin
 PYTHON_VERSION = 3.10
-PACKAGE = md-langevin
 
 # installation
 install:
@@ -19,4 +18,4 @@ install:
 
 # formatter
 format:
-	black $(PACKAGE)
+	black .

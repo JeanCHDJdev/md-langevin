@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "md-langevin"
+version = "0.1.0"
+description = "3rd year QTE project in CentraleSupélec around Molecular dynamics with a 3D Langevin thermostat."
+authors = [
+    { name = "Jean Choppin de Janvry", email = "jean.choppindejanvrydev@gmail.com" },
+    { name = "Rachel Wolf", email = "rachel.wolf@student-cs.fr" }
+]
+
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "matplotlib",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8",
+]
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["md-langevin*"]

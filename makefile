@@ -5,7 +5,7 @@ PYTHON_VERSION = 3.10
 PACKAGE = md-langevin
 
 # installation
-install-env:
+install:
 	@echo "Checking for existing Conda environment: $(ENV_NAME)"
 	@if conda info --envs | grep -q "^$(ENV_NAME) "; then \
 		echo "Removing existing Conda environment: $(ENV_NAME)"; \

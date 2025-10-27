@@ -22,7 +22,7 @@ class Langevin3D():
         self.gamma = 1e14 #s^-1
         self.k_B = 1.380649e-3 #(in A) #1.380649e-23 #J/K 
  
-        self.dt = 1 / (self.gamma * 100) #s
+        self.dt = 1 / (self.gamma * 1000) #s
 
         self.rng = np.random.default_rng(seed)
 
@@ -59,7 +59,7 @@ class Langevin3D():
     
     def langevin(self, trajectory):
         ri_p1 = self._compute_ri(trajectory[-1], trajectory[-2])
-        vi = 3 * trajectory[-1] - 4 * trajectory[-2] + trajectory[-3] / (2 * self.dt)
+        vi = (3 * trajectory[-1] - 4 * trajectory[-2] + trajectory[-3]) / (2 * self.dt)
         return ri_p1, vi
 
     def run(self, n_steps, r_init, v_init, mode='langevin'):
@@ -120,7 +120,7 @@ class Langevin3D():
         return self.kinetic_energy(speed) + self.potential_energy(traj)
 
     def temperature(self, speed):
-        return (self.mu * speed ** 2)/(3 * self.k_B)
+        return (self.mu * np.mean(speed ** 2))/(3 * self.k_B)
 
     def rotational_energy(self, traj, speed):
         rot_energy = []

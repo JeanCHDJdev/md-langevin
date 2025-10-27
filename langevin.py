@@ -9,7 +9,7 @@ class Langevin3D():
         # radius at equilibrium
         self.r_0 = 1.275 #A #1.275e-10 #m
         # D Morse potential
-        self.D = 46.141 # (in A) # 4.6141 * 1.60218e-19 #J
+        self.D = 46.141 #(in A) # 4.6141 * 1.60218e-19 #J
         # alpha Morse potential
         self.alpha = 1.81 #A^-1 1.81e10 #m^-1
 
@@ -25,7 +25,7 @@ class Langevin3D():
         self.dt = 1 / (self.gamma * 100) #s
 
         self.rng = np.random.default_rng(seed)
-        
+
         self.T = T
 
     def potential_Morse(self, r):
@@ -49,14 +49,10 @@ class Langevin3D():
         ri_p1 = 2*ri - ri_m1 + self.compute_force(ri) * self.dt**2 / self.mu
         return ri_p1
 
-    def _compute_vi_verlet(self, ri_p1, ri_m1):
-        """Velocity update for a particle"""
-        return (ri_p1 - ri_m1) / (2 * self.dt)
-    
     def verlet(self, trajectory):
         """Langevin dynamics update for a particle"""
         ri_p1 = self._compute_ri(trajectory[-1], trajectory[-2])
-        vi = self._compute_vi_verlet(ri_p1, trajectory[-2])
+        vi = (ri_p1 - trajectory[-2]) / (2 * self.dt)
         return ri_p1, vi
     
     def langevin(self, trajectory):
@@ -86,5 +82,31 @@ class Langevin3D():
             trajectory.append(r)
             speed.append(v)
 
-        return time, trajectory, speed
+        return np.array(time), np.array(trajectory), np.array(speed)
+
+    def distribute_v_to_3D(self, v):
+        """Distribute a scalar velocity to 3D components"""
+        theta = self.rng.uniform(0, np.pi)
+        phi = self.rng.uniform(0, 2 * np.pi)
+
+        vx = v * np.sin(theta) * np.cos(phi)
+        vy = v * np.sin(theta) * np.sin(phi)
+        vz = v * np.cos(theta)
+
+        return [vx, vy, vz]
     
+    def v_to_trajectory(self, speed):
+        """Convert 1D trajectory and speed to 3D trajectory and speed"""
+        assert len(speed) >= 1, "Speed list must contain at least one element"
+        traj_3D = [[0, 0, 0]]
+        speed_3D = [self.distribute_v_to_3D(speed[0])]
+        for v in speed:
+            vx, vy, vz = self.distribute_v_to_3D(v)
+            # integrate position components
+            rx = traj_3D[-1][0] + self.dt * vx
+            ry = traj_3D[-1][1] + self.dt * vy
+            rz = traj_3D[-1][2] + self.dt * vz
+            traj_3D.append((rx, ry, rz))
+            speed_3D.append((vx, vy, vz))
+
+        return np.array(traj_3D), np.array(speed_3D)

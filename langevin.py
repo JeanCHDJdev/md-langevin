@@ -28,6 +28,8 @@ class Langevin3D():
         
         self.T = T
 
+        self.h_bar = 1.05457182e-14 # (in A) # 1.05457182e-34 Js
+
     def potential_Morse(self, r):
         """Morse potential between two atoms at distance r"""
         return self.D * (np.exp(-self.alpha * (r - self.r_0)) - 1)**2
@@ -87,4 +89,26 @@ class Langevin3D():
             speed.append(v)
 
         return time, trajectory, speed
+    
+    def kinetic_energy(self,speed):
+        kinetic_energy=[]
+        for s in speed:
+            kinetic_energy.append(0.5*self.mu*s^2)
+        return kinetic_energy
+    
+    def temperature(self,speed):
+        return (self.mu*speed^2)/(3*self.k_B)
+    
+    def rotational_energy(self,traj,speed): 
+        rot_energy = []
+        for t,v in zip(traj,speed): 
+            p = self.mu * v
+            vectorial = np.cross(t,p)
+            rot_energy.append((vectorial^2)/((t^2)*2*self.mu))
+        return rot_energy
+
+    def vibrational_energy(self,traj,speed):
+        vib_energy = -((self.h_bar^2)/2*self.mu*traj)... # to complete
+        return
+
     

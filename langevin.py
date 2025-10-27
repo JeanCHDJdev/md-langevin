@@ -62,7 +62,7 @@ class Langevin3D():
         vi = (3 * trajectory[-1] - 4 * trajectory[-2] + trajectory[-3]) / (2 * self.dt)
         return ri_p1, vi
 
-    def run(self, n_steps, r_init, v_init, mode='langevin'):
+    def run(self, n_steps, r_init, v_init=None, T_init=None, mode='langevin'):
         """Run the Langevin dynamics simulation for n_steps"""
         assert n_steps >= 2, "n_steps must be at least 2"
         if mode == 'verlet':
@@ -72,6 +72,20 @@ class Langevin3D():
         else:
             raise ValueError("mode must be 'verlet' or 'langevin'")
         time = np.arange(n_steps) * self.dt
+        
+
+        if self.T is None:
+            if T_init is not None:
+                self.T = T_init
+            else:
+                if v_init is not None:
+                    self.T = self.mu * v_init ** 2 / (3 * self.k_B)
+        else:
+            T_init = self.T
+        if v_init is None:
+            assert T_init is not None, "Either v_init or T_init must be provided"
+            self.T = T_init
+            v_init = np.sqrt(3 * self.k_B * 2 * T_init / self.mu)
 
         trajectory = [r_init, r_init + v_init * self.dt, r_init + v_init * 2 * self.dt]
         speed = [v_init, v_init, v_init]

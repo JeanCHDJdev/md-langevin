@@ -73,9 +73,6 @@ class Langevin3D():
             raise ValueError("mode must be 'verlet' or 'langevin'")
         time = np.arange(n_steps) * self.dt
 
-        r = r_init
-        v = v_init
-
         trajectory = [r_init, r_init + v_init * self.dt, r_init + v_init * 2 * self.dt]
         speed = [v_init, v_init, v_init]
 
@@ -114,23 +111,26 @@ class Langevin3D():
         return np.array(traj_3D), np.array(speed_3D)
     
     def kinetic_energy(self,speed):
-        kinetic_energy=[]
-        for s in speed:
-            kinetic_energy.append(0.5*self.mu*s^2)
-        return kinetic_energy
+        return 0.5 * self.mu * speed ** 2
+
+    def potential_energy(self, traj):
+        return self.potential_Morse(traj)
     
-    def temperature(self,speed):
-        return (self.mu*speed^2)/(3*self.k_B)
-    
-    def rotational_energy(self,traj,speed): 
+    def total_energy(self, traj, speed):
+        return self.kinetic_energy(speed) + self.potential_energy(traj)
+
+    def temperature(self, speed):
+        return (self.mu * speed ** 2)/(3 * self.k_B)
+
+    def rotational_energy(self, traj, speed):
         rot_energy = []
         for t,v in zip(traj,speed): 
             p = self.mu * v
             vectorial = np.cross(t,p)
-            rot_energy.append((vectorial^2)/((t^2)*2*self.mu))
+            rot_energy.append((vectorial ** 2)/((t ** 2)*2*self.mu))
         return rot_energy
 
-    def vibrational_energy(self,traj,speed):
-        vib_energy = -((self.h_bar^2)/2*self.mu*traj) # to complete
+    def vibrational_energy(self, traj, speed):
+        vib_energy = -((self.h_bar ** 2)/2*self.mu*traj) # to complete
         return vib_energy
     

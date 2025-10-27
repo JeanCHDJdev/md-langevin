@@ -1,7 +1,7 @@
 import numpy as np
 
 ## parameters
-class Langevin3D():
+class Langevin3DRelative():
     # atomic mass unit
     amu = 1.660538921e-27 #kg 
 

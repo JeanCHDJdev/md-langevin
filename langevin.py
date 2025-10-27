@@ -19,7 +19,7 @@ class Langevin3D():
         # reduced mass
         self.mu = (self.m_Cl * self.m_H) / (self.m_Cl + self.m_H) #kg
 
-        self.gamma = 1e14 #s^-1
+        self.gamma = 1e15 #s^-1
         self.k_B = 1.380649e-3 #(in A) #1.380649e-23 #J/K
         self.h_bar = 1.05457182e-14 # (in A) # 1.05457182e-34 Js
 
@@ -35,33 +35,29 @@ class Langevin3D():
         """Gradient of the Morse potential"""
         return 2 * self.alpha * self.D * (np.exp(-self.alpha * (r - self.r_0)) - np.exp(-2 * self.alpha * (r - self.r_0)))
     
-    def force_Random(self):
+    def force_Random(self,  mass, n_draws=1):
         """Random force according to the fluctuation-dissipation theorem"""
-        r_amp = np.sqrt(2 * self.k_B * self.T * self.gamma * self.mu / self.dt)
-        return self.rng.normal(0, 1) * r_amp
-    
-    def compute_force(self, r):
-        if self.T is None:
-            return -self.force_Morse(r)
-        return -self.force_Morse(r) + self.force_Random()
+        r_amp = np.sqrt(2 * self.k_B * self.T * self.gamma * mass / self.dt)
+        return self.rng.normal(0, 1, size=n_draws) * r_amp
 
-    def _compute_ri(self, ri, ri_m1):
-        """Returns ri+1 with ri, ri-1"""
-        ri_p1 = 2*ri - ri_m1 + self.compute_force(ri) * self.dt**2 / self.mu
-        return ri_p1
+    def compute_force(self, r_rel, mass):
+        if self.T is None or mass is None:
+            return -self.force_Morse(r_rel)
+        f_rand = self.force_Random(n_draws=3, mass=mass)
+        return -self.force_Morse(r_rel) + f_rand
 
-    def verlet(self, trajectory):
+    def verlet(self, pos, mass, r_rel):
         """Langevin dynamics update for a particle"""
-        ri_p1 = self._compute_ri(trajectory[-1], trajectory[-2])
-        vi = (ri_p1 - trajectory[-2]) / (2 * self.dt)
+        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, mass=None) * self.dt**2 / mass
+        vi = (ri_p1 - pos[-2]) / (2 * self.dt)
         return ri_p1, vi
     
-    def langevin(self, trajectory):
-        ri_p1 = self._compute_ri(trajectory[-1], trajectory[-2])
-        vi = (3 * trajectory[-1] - 4 * trajectory[-2] + trajectory[-3]) / (2 * self.dt)
+    def langevin(self, pos, mass, r_rel):
+        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, mass=mass) * self.dt**2 / mass
+        vi = (3 * pos[-1] - 4 * pos[-2] + pos[-3]) / (2 * self.dt)
         return ri_p1, vi
 
-    def run(self, n_steps, r_init, v_init=None, T_init=None, mode='langevin'):
+    def run(self, n_steps, r_init_relative, v_init=None, T_init=None, mode='langevin'):
         """Run the Langevin dynamics simulation for n_steps"""
         assert n_steps >= 2, "n_steps must be at least 2"
         if mode == 'verlet':
@@ -71,23 +67,29 @@ class Langevin3D():
         else:
             raise ValueError("mode must be 'verlet' or 'langevin'")
         time = np.arange(n_steps) * self.dt
-        
 
-        if self.T is not None:
-            T_init = self.T
-        if v_init is None:
-            assert T_init is not None, "Either v_init or T_init must be provided"
-            v_init = np.sqrt(3 * self.k_B * 2 * T_init / self.mu)
+        r_Cl_init =  np.array([0, 0, 0])
+        r_H_init =  np.array([r_init_relative, 0, 0])
 
-        trajectory = [r_init, r_init + v_init * self.dt, r_init + v_init * 2 * self.dt]
-        speed = [v_init, v_init, v_init]
+        v_Cl_init =  np.array([0, 0, 0])
+        v_H_init =  np.array([0, 0, 0])
 
-        for _ in range(3, n_steps):
-            r, v = alg(trajectory)
-            trajectory.append(r)
-            speed.append(v)
+        r_Cl = [r_Cl_init, r_Cl_init + v_Cl_init * self.dt, r_Cl_init + 2 * v_Cl_init * self.dt]
+        r_H = [r_H_init, r_H_init + v_H_init * self.dt, r_H_init + 2 * v_H_init * self.dt]
+        v_Cl = [v_Cl_init, v_Cl_init, v_Cl_init]
+        v_H = [v_H_init, v_H_init, v_H_init]
 
-        return np.array(time), np.array(trajectory), np.array(speed)
+        for _ in range(3, len(time)):
+            r_rel = np.sqrt(np.sum((r_H[-1] - r_Cl[-1])**2))
+            r_H_new, v_H_new = alg(r_H, mass=self.m_H, r_rel=r_rel)
+            r_Cl_new, v_Cl_new = alg(r_Cl, mass=self.m_Cl, r_rel=r_rel)
+
+            r_H.append(r_H_new)
+            r_Cl.append(r_Cl_new)
+            v_H.append(v_H_new)
+            v_Cl.append(v_Cl_new)
+
+        return np.array(time), np.array(r_Cl), np.array(r_H), np.array(v_Cl), np.array(v_H)
 
     def distribute_v_to_3D(self, v):
         """Distribute a scalar velocity to 3D components"""
@@ -100,8 +102,8 @@ class Langevin3D():
 
         return [vx, vy, vz]
     
-    def v_to_trajectory(self, speed):
-        """Convert 1D trajectory and speed to 3D trajectory and speed"""
+    def v_to_pos(self, speed):
+        """Convert 1D pos and speed to 3D pos and speed"""
         assert len(speed) >= 1, "Speed list must contain at least one element"
         traj_3D = [[0, 0, 0]]
         speed_3D = [self.distribute_v_to_3D(speed[0])]

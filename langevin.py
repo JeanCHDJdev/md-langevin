@@ -56,13 +56,14 @@ class Langevin3D():
     def verlet(self, pos, speed, mass, r_rel):
         """Langevin dynamics update for a particle"""
         ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass) * self.dt**2 / mass
-        vi = (ri_p1 - pos[-2]) / (2 * self.dt)
-        return ri_p1, vi
-    
+        vi_p1 = (ri_p1 - pos[-2]) / (2 * self.dt)
+        return ri_p1, vi_p1
+
     def langevin(self, pos, speed, mass, r_rel):
-        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass) * self.dt**2 / mass
-        vi = (3 * pos[-1] - 4 * pos[-2] + pos[-3]) / (2 * self.dt)
-        return ri_p1, vi
+        force = self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass)
+        ri_p1 = 2*pos[-1] - pos[-2] + force * self.dt**2 / mass
+        vi_p1 = (3 * ri_p1 - 4 * pos[-1] + pos[-2]) / (2 * self.dt)
+        return ri_p1, vi_p1, force
 
     def run(self, n_steps, r_init_relative, v_init=None, T_init=None, mode='langevin'):
         """Run the Langevin dynamics simulation for n_steps"""
@@ -75,42 +76,56 @@ class Langevin3D():
             raise ValueError("mode must be 'verlet' or 'langevin'")
         time = np.arange(n_steps) * self.dt
 
-        r_Cl_init = np.array([0, 0, 0])
-        r_H_init = np.array([r_init_relative, 0, 0])
+        r_Cl_0 = np.array([0, 0, 0])
+        r_H_0 = np.array([r_init_relative, 0, 0])
 
-        v_Cl_init = np.array([0, 0, 0])
-        v_H_init = np.array([0, 0, 0])
+        v_Cl_0 = np.array([0, 0, 0])
+        v_H_0 = np.array([0, 0, 0])
+        r_rel_0 = np.sqrt(np.sum((r_H_0 - r_Cl_0)**2))
 
-        r_Cl = [r_Cl_init, r_Cl_init + v_Cl_init * self.dt, r_Cl_init + 2 * v_Cl_init * self.dt]
-        r_H = [r_H_init, r_H_init + v_H_init * self.dt, r_H_init + 2 * v_H_init * self.dt]
-        v_Cl = [v_Cl_init, v_Cl_init, v_Cl_init]
-        v_H = [v_H_init, v_H_init, v_H_init]
+        force_Cl_0 = self.compute_force(r_rel=r_rel_0, v=v_Cl_0, mass=self.m_Cl)
+        r_Cl_1 = r_Cl_0 + v_Cl_0 * self.dt + 0.5 * force_Cl_0 * self.dt**2 / (2*self.m_Cl)
+        r_Cl = [r_Cl_0, r_Cl_1]
+        v_Cl_1 = v_Cl_0 + force_Cl_0 * self.dt / self.m_Cl
+        v_Cl = [v_Cl_0, v_Cl_1]
+
+        force_H_0  = self.compute_force(r_rel=r_rel_0, v=v_H_0, mass=self.m_H)
+        r_H_1 = r_H_0 + v_H_0 * self.dt + 0.5 * force_H_0 * self.dt**2 / (2*self.m_H)
+        r_H = [r_H_0, r_H_1]
+        v_H_1 = v_H_0 + force_H_0 * self.dt / self.m_H
+        v_H = [v_H_0, v_H_1]
+
+        r_rel_1 = np.sqrt(np.sum((r_H_1 - r_Cl_1)**2))
+        force_H_1 = self.compute_force(r_rel=r_rel_1, v=v_H_1, mass=self.m_H)
+        force_Cl_1 = self.compute_force(r_rel=r_rel_1, v=v_Cl_1, mass=self.m_Cl)
         
-        r_rel_array = []
-        for i in range(3):
-            r_rel_i = np.sqrt(np.sum((r_H[i] - r_Cl[i])**2))
-            r_rel_array.append(r_rel_i)
+        r_rel = [r_rel_0, r_rel_1]
+        force_H = [force_H_0, force_H_1]
+        force_Cl = [force_Cl_0, force_Cl_1]
 
-        for _ in range(3, len(time)):
-            r_rel = r_rel_array[-1]
-            r_H_new, v_H_new = alg(pos=r_H, speed=v_H, mass=self.m_H, r_rel=r_rel)
-            r_Cl_new, v_Cl_new = alg(pos=r_Cl, speed=v_Cl, mass=self.m_Cl, r_rel=r_rel)
+        for _ in range(2, len(time)):
+            r_rel_this = r_rel[-1]
+            r_H_new, v_H_new, force_H_new = alg(pos=r_H, speed=v_H, mass=self.m_H, r_rel=r_rel_this)
+            r_Cl_new, v_Cl_new, force_Cl_new = alg(pos=r_Cl, speed=v_Cl, mass=self.m_Cl, r_rel=r_rel_this)
 
             r_H.append(r_H_new)
             r_Cl.append(r_Cl_new)
             v_H.append(v_H_new)
             v_Cl.append(v_Cl_new)
+            force_H.append(force_H_new)
+            force_Cl.append(force_Cl_new)
             
-            r_rel_new = np.sqrt(np.sum((r_H_new - r_Cl_new)**2))
-            r_rel_array.append(r_rel_new)
+            r_rel.append(np.sqrt(np.sum((r_H_new - r_Cl_new)**2)))
 
         data = {
             "time": np.array(time),
             "r_Cl": np.array(r_Cl),
-            "r_H": np.array(r_H),
             "v_Cl": np.array(v_Cl),
+            "force_Cl": np.array(force_Cl),
+            "r_H": np.array(r_H),
             "v_H": np.array(v_H),
-            "r_rel": np.array(r_rel_array)
+            "force_H": np.array(force_H),
+            "r_rel": np.array(r_rel)
         }
         ## compute by-products
         data['kinetic_energy_H'] = 0.5 * self.m_H * np.sum(data['v_H']**2, axis=1)

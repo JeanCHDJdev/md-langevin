@@ -55,9 +55,10 @@ class Langevin3D():
 
     def verlet(self, pos, speed, mass, r_rel):
         """Langevin dynamics update for a particle"""
-        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass) * self.dt**2 / mass
+        force = self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass)
+        ri_p1 = 2*pos[-1] - pos[-2] + force * self.dt**2 / mass
         vi_p1 = (ri_p1 - pos[-2]) / (2 * self.dt)
-        return ri_p1, vi_p1
+        return ri_p1, vi_p1, force
 
     def langevin(self, pos, speed, mass, r_rel):
         force = self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass)
@@ -104,9 +105,8 @@ class Langevin3D():
         force_Cl = [force_Cl_0, force_Cl_1]
 
         for _ in range(2, len(time)):
-            r_rel_this = r_rel[-1]
-            r_H_new, v_H_new, force_H_new = alg(pos=r_H, speed=v_H, mass=self.m_H, r_rel=r_rel_this)
-            r_Cl_new, v_Cl_new, force_Cl_new = alg(pos=r_Cl, speed=v_Cl, mass=self.m_Cl, r_rel=r_rel_this)
+            r_H_new, v_H_new, force_H_new = alg(pos=r_H, speed=v_H, mass=self.m_H, r_rel=r_rel[-1])
+            r_Cl_new, v_Cl_new, force_Cl_new = alg(pos=r_Cl, speed=v_Cl, mass=self.m_Cl, r_rel=r_rel[-1])
 
             r_H.append(r_H_new)
             r_Cl.append(r_Cl_new)

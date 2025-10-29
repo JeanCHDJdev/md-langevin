@@ -19,7 +19,7 @@ class Langevin3D():
         # reduced mass
         self.mu = (self.m_Cl * self.m_H) / (self.m_Cl + self.m_H) #kg
 
-        self.gamma = 1e15 #s^-1
+        self.gamma = 3e11 #s^-1
         self.k_B = 1.380649e-3 #(in A) #1.380649e-23 #J/K
         self.h_bar = 1.05457182e-14 # (in A) # 1.05457182e-34 Js
 
@@ -39,21 +39,24 @@ class Langevin3D():
         """Random force according to the fluctuation-dissipation theorem"""
         r_amp = np.sqrt(2 * self.k_B * self.T * self.gamma * mass / self.dt)
         return self.rng.normal(0, 1, size=n_draws) * r_amp
+    
+    def force_viscosity(self, v, mass):
+        """Viscous force according to Langevin equation"""
+        return - self.gamma * mass * v
 
-    def compute_force(self, r_rel, mass):
+    def compute_force(self, r_rel, v, mass):
         if self.T is None or mass is None:
             return -self.force_Morse(r_rel)
-        f_rand = self.force_Random(n_draws=3, mass=mass)
-        return -self.force_Morse(r_rel) + f_rand
+        return -self.force_Morse(r_rel) + self.force_Random(n_draws=3, mass=mass) + self.force_viscosity(v, mass)
 
-    def verlet(self, pos, mass, r_rel):
+    def verlet(self, pos, speed, mass, r_rel):
         """Langevin dynamics update for a particle"""
-        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, mass=None) * self.dt**2 / mass
+        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass) * self.dt**2 / mass
         vi = (ri_p1 - pos[-2]) / (2 * self.dt)
         return ri_p1, vi
     
-    def langevin(self, pos, mass, r_rel):
-        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, mass=mass) * self.dt**2 / mass
+    def langevin(self, pos, speed, mass, r_rel):
+        ri_p1 = 2*pos[-1] - pos[-2] + self.compute_force(r_rel=r_rel, v=speed[-1], mass=mass) * self.dt**2 / mass
         vi = (3 * pos[-1] - 4 * pos[-2] + pos[-3]) / (2 * self.dt)
         return ri_p1, vi
 
@@ -68,11 +71,11 @@ class Langevin3D():
             raise ValueError("mode must be 'verlet' or 'langevin'")
         time = np.arange(n_steps) * self.dt
 
-        r_Cl_init =  np.array([0, 0, 0])
-        r_H_init =  np.array([r_init_relative, 0, 0])
+        r_Cl_init = np.array([0, 0, 0])
+        r_H_init = np.array([r_init_relative, 0, 0])
 
-        v_Cl_init =  np.array([0, 0, 0])
-        v_H_init =  np.array([0, 0, 0])
+        v_Cl_init = np.array([0, 0, 0])
+        v_H_init = np.array([0, 0, 0])
 
         r_Cl = [r_Cl_init, r_Cl_init + v_Cl_init * self.dt, r_Cl_init + 2 * v_Cl_init * self.dt]
         r_H = [r_H_init, r_H_init + v_H_init * self.dt, r_H_init + 2 * v_H_init * self.dt]
@@ -81,15 +84,24 @@ class Langevin3D():
 
         for _ in range(3, len(time)):
             r_rel = np.sqrt(np.sum((r_H[-1] - r_Cl[-1])**2))
-            r_H_new, v_H_new = alg(r_H, mass=self.m_H, r_rel=r_rel)
-            r_Cl_new, v_Cl_new = alg(r_Cl, mass=self.m_Cl, r_rel=r_rel)
+            r_H_new, v_H_new = alg(pos=r_H, speed=v_H, mass=self.m_H, r_rel=r_rel)
+            r_Cl_new, v_Cl_new = alg(pos=r_Cl, speed=v_Cl, mass=self.m_Cl, r_rel=r_rel)
 
             r_H.append(r_H_new)
             r_Cl.append(r_Cl_new)
             v_H.append(v_H_new)
             v_Cl.append(v_Cl_new)
 
-        return np.array(time), np.array(r_Cl), np.array(r_H), np.array(v_Cl), np.array(v_H)
+        data = {
+            "time": np.array(time),
+            "r_Cl": np.array(r_Cl),
+            "r_H": np.array(r_H),
+            "v_Cl": np.array(v_Cl),
+            "v_H": np.array(v_H),
+            "r_rel": np.array([np.sqrt(np.sum((r_H[i] - r_Cl[i])**2)) for i in range(len(r_H))])
+        }
+        ## compute by products : temperature 
+        return data
 
     def distribute_v_to_3D(self, v):
         """Distribute a scalar velocity to 3D components"""

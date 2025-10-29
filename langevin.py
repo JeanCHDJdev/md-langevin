@@ -84,13 +84,13 @@ class Langevin3D():
         r_rel_0 = np.sqrt(np.sum((r_H_0 - r_Cl_0)**2))
 
         force_Cl_0 = self.compute_force(r_rel=r_rel_0, v=v_Cl_0, mass=self.m_Cl)
-        r_Cl_1 = r_Cl_0 + v_Cl_0 * self.dt + 0.5 * force_Cl_0 * self.dt**2 / (2*self.m_Cl)
+        r_Cl_1 = r_Cl_0 + v_Cl_0 * self.dt + 0.5 * force_Cl_0 * self.dt**2 / (self.m_Cl)
         r_Cl = [r_Cl_0, r_Cl_1]
         v_Cl_1 = v_Cl_0 + force_Cl_0 * self.dt / self.m_Cl
         v_Cl = [v_Cl_0, v_Cl_1]
 
         force_H_0  = self.compute_force(r_rel=r_rel_0, v=v_H_0, mass=self.m_H)
-        r_H_1 = r_H_0 + v_H_0 * self.dt + 0.5 * force_H_0 * self.dt**2 / (2*self.m_H)
+        r_H_1 = r_H_0 + v_H_0 * self.dt + 0.5 * force_H_0 * self.dt**2 / (self.m_H)
         r_H = [r_H_0, r_H_1]
         v_H_1 = v_H_0 + force_H_0 * self.dt / self.m_H
         v_H = [v_H_0, v_H_1]

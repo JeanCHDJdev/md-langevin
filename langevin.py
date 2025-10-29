@@ -6,6 +6,7 @@ class Langevin3D():
     amu = 1.660538921e-27 #kg 
 
     def __init__(self, T=None, seed=123, dt=1e-15):
+        self.dimension = 3
         # radius at equilibrium
         self.r_0 = 1.275 #A #1.275e-10 #m
         # D Morse potential
@@ -19,7 +20,7 @@ class Langevin3D():
         # reduced mass
         self.mu = (self.m_Cl * self.m_H) / (self.m_Cl + self.m_H) #kg
 
-        self.gamma = 3e11 #s^-1
+        self.gamma = 6e11 #s^-1
         self.k_B = 1.380649e-3 #(in A) #1.380649e-23 #J/K
         self.h_bar = 1.05457182e-14 # (in A) # 1.05457182e-34 Js
 
@@ -45,9 +46,12 @@ class Langevin3D():
         return - self.gamma * mass * v
 
     def compute_force(self, r_rel, v, mass):
+        fm = -self.force_Morse(r_rel) * np.ones(self.dimension)
         if self.T is None or mass is None:
-            return -self.force_Morse(r_rel)
-        return -self.force_Morse(r_rel) + self.force_Random(n_draws=3, mass=mass) + self.force_viscosity(v, mass)
+            return fm
+        fv = self.force_viscosity(v, mass) * np.ones(self.dimension)
+        fr = self.force_Random(n_draws=self.dimension, mass=mass)
+        return fm + fr + fv
 
     def verlet(self, pos, speed, mass, r_rel):
         """Langevin dynamics update for a particle"""
@@ -101,46 +105,11 @@ class Langevin3D():
             "r_rel": np.array([np.sqrt(np.sum((r_H[i] - r_Cl[i])**2)) for i in range(len(r_H))])
         }
         ## compute by products : temperature 
+        data['kinetic_energy_H'] = 0.5 * self.m_H * np.sum(data['v_H']**2, axis=1)
+        data['kinetic_energy_Cl'] = 0.5 * self.m_Cl * np.sum(data['v_Cl']**2, axis=1)
+        data['potential_energy'] = self.potential_Morse(data['r_rel'])
+ 
         return data
-
-    def distribute_v_to_3D(self, v):
-        """Distribute a scalar velocity to 3D components"""
-        theta = self.rng.uniform(0, np.pi)
-        phi = self.rng.uniform(0, 2 * np.pi)
-
-        vx = v * np.sin(theta) * np.cos(phi)
-        vy = v * np.sin(theta) * np.sin(phi)
-        vz = v * np.cos(theta)
-
-        return [vx, vy, vz]
-    
-    def v_to_pos(self, speed):
-        """Convert 1D pos and speed to 3D pos and speed"""
-        assert len(speed) >= 1, "Speed list must contain at least one element"
-        traj_3D = [[0, 0, 0]]
-        speed_3D = [self.distribute_v_to_3D(speed[0])]
-        for v in speed:
-            vx, vy, vz = self.distribute_v_to_3D(v)
-            # integrate position components
-            rx = traj_3D[-1][0] + self.dt * vx
-            ry = traj_3D[-1][1] + self.dt * vy
-            rz = traj_3D[-1][2] + self.dt * vz
-            traj_3D.append((rx, ry, rz))
-            speed_3D.append((vx, vy, vz))
-
-        return np.array(traj_3D), np.array(speed_3D)
-    
-    def kinetic_energy(self,speed):
-        return 0.5 * self.mu * speed ** 2
-
-    def potential_energy(self, traj):
-        return self.potential_Morse(traj)
-    
-    def total_energy(self, traj, speed):
-        return self.kinetic_energy(speed) + self.potential_energy(traj)
-
-    def temperature(self, speed):
-        return (self.mu * np.mean(speed ** 2))/(3 * self.k_B)
 
     def rotational_energy(self, traj, speed):
         rot_energy = []

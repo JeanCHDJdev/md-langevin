@@ -8,11 +8,11 @@ class Langevin3D():
     def __init__(self, T=None, seed=123, dt=1e-15):
         self.dimension = 3
         # radius at equilibrium
-        self.r_0 = 1.275 #A #1.275e-10 #m
+        self.r_0 = 1.275 #A #1.275e-10 m
         # D Morse potential
-        self.D = 46.141 #(in A) # 4.6141 * 1.60218e-19 #J
+        self.D = 4.6141 * 1.60218e1 #(in A) #4.6141 * 1.60218e-19 J
         # alpha Morse potential
-        self.alpha = 1.81 #A^-1 1.81e10 #m^-1
+        self.alpha = 1.81 #A^-1 1.81e10 m^-1
 
         # masses
         self.m_Cl = 35.43 * self.amu #kg
@@ -85,9 +85,14 @@ class Langevin3D():
         r_H = [r_H_init, r_H_init + v_H_init * self.dt, r_H_init + 2 * v_H_init * self.dt]
         v_Cl = [v_Cl_init, v_Cl_init, v_Cl_init]
         v_H = [v_H_init, v_H_init, v_H_init]
+        
+        r_rel_array = []
+        for i in range(3):
+            r_rel_i = np.sqrt(np.sum((r_H[i] - r_Cl[i])**2))
+            r_rel_array.append(r_rel_i)
 
         for _ in range(3, len(time)):
-            r_rel = np.sqrt(np.sum((r_H[-1] - r_Cl[-1])**2))
+            r_rel = r_rel_array[-1]
             r_H_new, v_H_new = alg(pos=r_H, speed=v_H, mass=self.m_H, r_rel=r_rel)
             r_Cl_new, v_Cl_new = alg(pos=r_Cl, speed=v_Cl, mass=self.m_Cl, r_rel=r_rel)
 
@@ -95,6 +100,9 @@ class Langevin3D():
             r_Cl.append(r_Cl_new)
             v_H.append(v_H_new)
             v_Cl.append(v_Cl_new)
+            
+            r_rel_new = np.sqrt(np.sum((r_H_new - r_Cl_new)**2))
+            r_rel_array.append(r_rel_new)
 
         data = {
             "time": np.array(time),
@@ -102,9 +110,9 @@ class Langevin3D():
             "r_H": np.array(r_H),
             "v_Cl": np.array(v_Cl),
             "v_H": np.array(v_H),
-            "r_rel": np.array([np.sqrt(np.sum((r_H[i] - r_Cl[i])**2)) for i in range(len(r_H))])
+            "r_rel": np.array(r_rel_array)
         }
-        ## compute by products : temperature 
+        ## compute by-products
         data['kinetic_energy_H'] = 0.5 * self.m_H * np.sum(data['v_H']**2, axis=1)
         data['kinetic_energy_Cl'] = 0.5 * self.m_Cl * np.sum(data['v_Cl']**2, axis=1)
         data['potential_energy'] = self.potential_Morse(data['r_rel'])

@@ -10,7 +10,7 @@ class Langevin3D():
         # radius at equilibrium
         self.r_0 = 1.275 #A #1.275e-10 m
         # D Morse potential
-        self.D = 4.6141 * 1.60218e1 #(in A) #4.6141 * 1.60218e-19 J
+        self.D = 4.6141 #(in A) #4.6141 * 1.60218e-19 J
         # alpha Morse potential
         self.alpha = 1.81 #A^-1 1.81e10 m^-1
 
@@ -21,8 +21,8 @@ class Langevin3D():
         self.mu = (self.m_Cl * self.m_H) / (self.m_Cl + self.m_H) #kg
 
         self.gamma = 6e11 #s^-1
-        self.k_B = 1.380649e-3 #(in A) #1.380649e-23 #J/K
-        self.h_bar = 1.05457182e-14 # (in A) # 1.05457182e-34 Js
+        self.k_B = 1.380649e-23 / 1.60218e-19 #J/K
+        self.h_bar = 1.05457182e-34 / 1.60218e-19
 
         self.dt = dt
         self.rng = np.random.default_rng(seed)

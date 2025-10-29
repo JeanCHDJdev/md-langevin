@@ -34,7 +34,7 @@ class Langevin3D():
     
     def force_Morse(self, r):
         """Gradient of the Morse potential"""
-        return 2 * self.alpha * self.D * (np.exp(-self.alpha * (r - self.r_0)) - np.exp(-2 * self.alpha * (r - self.r_0)))
+        return -2 * self.alpha * self.D * (np.exp(-self.alpha * (r - self.r_0)) - np.exp(-2 * self.alpha * (r - self.r_0)))
     
     def force_Random(self,  mass, n_draws=1):
         """Random force according to the fluctuation-dissipation theorem"""
@@ -46,7 +46,7 @@ class Langevin3D():
         return - self.gamma * mass * v
 
     def compute_force(self, r_rel, v, mass):
-        fm = -self.force_Morse(r_rel) * np.ones(self.dimension)
+        fm = self.force_Morse(r_rel) * np.ones(self.dimension)
         if self.T is None or mass is None:
             return fm
         fv = self.force_viscosity(v, mass) * np.ones(self.dimension)

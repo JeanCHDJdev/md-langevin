@@ -274,15 +274,17 @@ class Langevin3D():
             raise ValueError(f"Unknown potential type: {self.potential}")
         return pot_energy
     
-    def rotational_energy(self, traj, speed):
-        rot_energy = []
-        for t,v in zip(traj,speed): 
-            p = self.mu * v
-            vectorial = np.cross(t,p)
-            rot_energy.append((vectorial ** 2)/((t ** 2)*2*self.mu))
+    def rotational_energy(self,angular_velocity,r_rel):
+        r_rel_norm_squared = np.sum(r.rel)
+        rot_energy = 0.5 * self.mu *
+
         return rot_energy
 
-    def vibrational_energy(self, traj, speed):
-        vib_energy = -((self.h_bar ** 2)/2*self.mu*traj) # to complete
-        return vib_energy
+    def vibration_energy(self, traj, speed):
+        
+        return 
     
+    def translation_energy_com(self, speed_Cl, speed_H):
+        v_norm = np.sqrt(np.sum((speed_Cl-speed_H)**2, axis=1))
+        coeff = ((self.m_Cl*self.m_H)/(2*(self.m_H+self.m_Cl)**2))
+        return coeff*v_norm

@@ -299,12 +299,15 @@ class Langevin3D():
             raise ValueError(f"Unknown potential type: {self.potential}")
         return pot_energy
     
-    def vibration_energy(self, traj, speed):
-        
-        return 
+    def vibration_energy(self,r_relative):
+        r = r_relative
+        v_rel = np.gradient(r,self.df)
+        vib_e = np.sum((v_rel)**2,axis=1)/(2*(self.m_Cl+self.m_H))
+        return vib_e
     
     
     def translation_energy_com(self, speed_Cl, speed_H):
-        v_norm = np.sqrt(np.sum((speed_Cl-speed_H)**2, axis=1))
-        coeff = ((self.m_Cl*self.m_H)/(2*(self.m_H+self.m_Cl)**2))
-        return coeff*v_norm
+        P = np.sum((self.m_cl*speed_Cl+self.m_H*speed_H)**2,axis=1)
+        coeff = 1/(2*(self.m_Cl + self.m_H))
+        return coeff*P
+    

@@ -62,7 +62,7 @@ class Langevin3D():
 
     def force_random(self, mass, n_draws=1):
         """Random force according to the fluctuation-dissipation theorem"""
-        r_amp = np.sqrt(2 * self.k_B * self.T * self.gamma * mass / self.dt)
+        r_amp = np.sqrt(2 * mass * self.k_B * self.T * self.gamma) #/ self.dt
         return self.rng.normal(0, 1, size=n_draws) * r_amp
     
     def force_viscosity(self, v, mass):
@@ -238,7 +238,35 @@ class Langevin3D():
             kinetic_energy=kin_tot,
             temp_window=temp_window
         )
+        v_rel = data['v_H'] - data['v_Cl']
+        r_rel = data['r_H'] - data['r_Cl']
+        L_components = np.cross(r_rel, v_rel, axisa=1, axisb=1)
+        J = np.sum(L_components**2, axis=1)
+        byproducts['L_components'] = L_components
+        byproducts['J'] = J
+        byproducts['rotational_energy'] = 0.5 * J / self.inertia(r_rel=data['r_rel'])
+
+        
+        #r_cm = self.qt_to_COM(data["r_H"], data["r_Cl"])
+        #v_cm = self.qt_to_COM(data["v_H"], data["v_Cl"])
+        #r_rel_H = data['r_H'] - r_cm
+        #r_rel_Cl = data['r_Cl'] - r_cm
+        #v_rel_H = data['v_H'] - v_cm
+        #v_rel_Cl = data['v_Cl'] - v_cm
+
+        #L_H = self.angular_velocity(r_rel=r_rel_H, v_rel=v_rel_H) * self.m_H
+        #L_Cl = self.angular_velocity(r_rel=r_rel_Cl, v_rel=v_rel_Cl) * self.m_Cl
+        #L_tot = L_H + L_Cl
+        #Inertia = self.inertia(r_rel=data['r_rel'])
+        #rotational_energy = 0.5
+
         return byproducts
+    
+    def inertia(self, r_rel):
+        return self.mu * r_rel**2
+
+    def qt_to_COM(self, qt_H, qt_Cl):
+        return (self.m_H * qt_H + self.m_Cl * qt_Cl) / (self.m_Cl + self.m_H)
     
     @classmethod
     def load_from_file(cls, filename):
@@ -253,10 +281,9 @@ class Langevin3D():
     def temperature(self, kinetic_energy, temp_window):
         temp = (2/3) * kinetic_energy / self.k_B
         if temp_window is not None:
-            window_size = int(temp_window / self.dt)
-            if window_size % 2 == 0:
-                window_size += 1
-            temp = pd.Series(temp).rolling(window=window_size, center=True, min_periods=1).mean().to_numpy()
+            if temp_window % 2 == 0:
+                temp_window += 1
+            temp = pd.Series(temp).rolling(window=temp_window, center=True, min_periods=1).mean().to_numpy()
         return temp
     
     @staticmethod
@@ -274,17 +301,12 @@ class Langevin3D():
             raise ValueError(f"Unknown potential type: {self.potential}")
         return pot_energy
     
-    def rotational_energy(self,angular_velocity,r_rel):
-        r_rel_norm_squared = np.sum(r.rel)
-        rot_energy = 0.5 * self.mu *
-
-        return rot_energy
-
     def vibration_energy(self,r_relative):
         r = r_relative
         v_rel = np.gradient(r,self.df)
         vib_e = np.sum((v_rel)**2,axis=1)/(2*(self.m_Cl+self.m_H))
         return vib_e
+    
     
     def translation_energy_com(self, speed_Cl, speed_H):
         P = np.sum((self.m_cl*speed_Cl+self.m_H*speed_H)**2,axis=1)

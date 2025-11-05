@@ -16,6 +16,7 @@ requires-python = ">=3.8"
 dependencies = [
     "matplotlib",
     "numpy",
+    "pandas",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,5 @@ exclude = '''
 )/
 '''
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["md-langevin*"]
+[tool.setuptools]
+packages = ["langevin"]

@@ -5,7 +5,6 @@ def get_base_dir():
 
 def get_nb_dir():
     nb_dir = get_base_dir() / 'nb'
-    assert nb_dir.exists(), "The 'nb' directory does not exist."
     return nb_dir
 
 def get_simulations_dir():

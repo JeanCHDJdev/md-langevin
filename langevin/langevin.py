@@ -240,6 +240,16 @@ class Langevin3D():
         )
         return byproducts
     
+    @classmethod
+    def load_from_file(cls, filename):
+        data = np.load(filename)
+        ## data has more keys than the __init__ parameters
+        init_params = cls.__init__.__code__.co_varnames
+        instance_data = {k: data[k] for k in data.files if k in init_params}
+        instance = cls(**instance_data)
+
+        return instance, data
+
     def temperature(self, kinetic_energy, temp_window):
         temp = (2/3) * kinetic_energy / self.k_B
         if temp_window is not None:

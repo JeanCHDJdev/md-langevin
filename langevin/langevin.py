@@ -223,8 +223,6 @@ class Langevin3D():
     
     def compute_byproducts(self, data, temp_window=100):
         byproducts = {}
-        #byproducts["rotational_energy"] = self.rotational_energy()
-        #byproducts["vibrational_energy"] = self.vibrational_energy()
         kin_h = self.kinetic_energy(data["v_H"], self.m_H)
         kin_cl = self.kinetic_energy(data["v_Cl"], self.m_Cl)
         kin_tot = kin_h + kin_cl
@@ -240,11 +238,11 @@ class Langevin3D():
         )
         v_rel = data['v_H'] - data['v_Cl']
         r_rel = data['r_H'] - data['r_Cl']
-        L_components = np.cross(r_rel, v_rel, axisa=1, axisb=1)
-        J = np.sum(L_components**2, axis=1)
-        byproducts['L_components'] = L_components
-        byproducts['J'] = J
-        byproducts['rotational_energy'] = 0.5 * J / self.inertia(r_rel=data['r_rel'])
+        #L_components = np.cross(r_rel, v_rel, axisa=1, axisb=1)
+        #J = np.sum(L_components**2, axis=1)
+        #byproducts['L_components'] = L_components
+        #byproducts['J'] = J
+        #byproducts['rotational_energy'] = 0.5 * J / self.inertia(r_rel=r_rel)
 
         
         #r_cm = self.qt_to_COM(data["r_H"], data["r_Cl"])

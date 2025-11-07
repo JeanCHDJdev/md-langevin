@@ -238,12 +238,11 @@ class Langevin3D():
         )
         v_rel = data['v_H'] - data['v_Cl']
         r_rel = data['r_H'] - data['r_Cl']
-        #L_components = np.cross(r_rel, v_rel, axisa=1, axisb=1)
+        L_components = np.cross(r_rel, v_rel, axisa=1, axisb=1)
         #J = np.sum(L_components**2, axis=1)
         #byproducts['L_components'] = L_components
         #byproducts['J'] = J
-        #byproducts['rotational_energy'] = 0.5 * J / self.inertia(r_rel=r_rel)
-
+        #byproducts['rotational_energy'] = 0.5 * J / self.inertia(r_rel=np.sum(r_rel**2, axis=1)**0.5)
         
         #r_cm = self.qt_to_COM(data["r_H"], data["r_Cl"])
         #v_cm = self.qt_to_COM(data["v_H"], data["v_Cl"])
@@ -259,9 +258,6 @@ class Langevin3D():
         #rotational_energy = 0.5
 
         return byproducts
-    
-    def inertia(self, r_rel):
-        return self.mu * r_rel**2
 
     def qt_to_COM(self, qt_H, qt_Cl):
         return (self.m_H * qt_H + self.m_Cl * qt_Cl) / (self.m_Cl + self.m_H)
@@ -285,9 +281,8 @@ class Langevin3D():
         return temp
     
     @staticmethod
-    def kinetic_energy(speed, mass):
-        kin_energy = 0.5 * mass * np.sum(speed ** 2, axis=1)
-        return kin_energy
+    def kinetic_energy(v, mass):
+        return 0.5 * mass * np.sum(v ** 2, axis=1)
     
     def potential_energy(self, r_rel):
         pot_energy = []
@@ -298,16 +293,21 @@ class Langevin3D():
         else:
             raise ValueError(f"Unknown potential type: {self.potential}")
         return pot_energy
+
+    def rotation_energy(self, r_H, r_Cl, v_H, v_Cl):
+        L_components = self.mu * np.cross(r_H - r_Cl, v_H - v_Cl, axisa=1, axisb=1)
+        J = np.sum(L_components**2, axis=1)
+        rot_e = 0.5 * J / (self.mu * np.sqrt(np.sum(r_H - r_Cl, axis=1)**2))
+        return rot_e
     
-    def vibration_energy(self,r_relative):
-        r = r_relative
-        v_rel = np.gradient(r,self.df)
-        vib_e = np.sum((v_rel)**2,axis=1)/(2*(self.m_Cl+self.m_H))
+    def vibration_energy(self, r_H, r_Cl, v_H, v_Cl):
+        dots = []
+        for i in range(len(r_H)):
+            dots.append(np.dot(v_H[i] - v_Cl[i], r_H[i] - r_Cl[i]))
+        vib_e = 0.5 * self.mu * (np.array(dots) ** 2) / (np.sum((r_H - r_Cl), axis=1) ** 2)
         return vib_e
     
-    
-    def translation_energy_com(self, speed_Cl, speed_H):
-        P = np.sum((self.m_cl*speed_Cl+self.m_H*speed_H)**2,axis=1)
-        coeff = 1/(2*(self.m_Cl + self.m_H))
-        return coeff*P
-    
+    def translation_energy(self, r_H, r_Cl, v_H, v_Cl):
+        v_cm = (self.m_H * v_H + self.m_Cl * v_Cl) / (self.m_H + self.m_Cl)
+        transl_e = 0.5 * (self.m_H + self.m_Cl) * np.sum(v_cm**2, axis=1)
+        return transl_e

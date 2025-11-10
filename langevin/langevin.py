@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import datetime
 
+from scipy import signal
 from pathlib import Path
 
 class Langevin3D():
@@ -15,7 +16,7 @@ class Langevin3D():
         # alpha morse potential
         self.alpha = 1.81 #A^-1 1.81e10 m^-1
 
-        self.k = self.D * self.alpha**2 # harmonic constant (taylor series expansion)
+        self.k = 2*self.D * self.alpha**2 # harmonic constant (taylor series expansion)
 
         # masses
         # atomic mass unit
@@ -53,16 +54,19 @@ class Langevin3D():
 
     def potential_harmonic(self, r):
         """Harmonic potential between two atoms at distance r"""
-        return self.k * (r - self.r_0)**2
+        return 0.5 * self.k * (r - self.r_0)**2
     
     def force_harmonic(self, r):
         """Gradient of the harmonic potential"""
-        force = -2 * self.k * (r - self.r_0)
+        force = np.zeros(self.dimension)
+        r_rel = np.sqrt(np.sum(r**2))
+        for i in range(self.dimension):
+            force[i] = -self.k * (r_rel - self.r_0) * r[i]/r_rel
         return force
 
     def force_random(self, mass, n_draws=1):
         """Random force according to the fluctuation-dissipation theorem"""
-        r_amp = np.sqrt(2 * mass * self.k_B * self.T * self.gamma) #/ self.dt
+        r_amp = np.sqrt(2 * mass * self.k_B * self.T * self.gamma / self.dt)
         return self.rng.normal(0, 1, size=n_draws) * r_amp
     
     def force_viscosity(self, v, mass):
@@ -229,33 +233,31 @@ class Langevin3D():
         byproducts["kinetic_energy_H"] = kin_h
         byproducts["kinetic_energy_Cl"] = kin_cl
         byproducts["kinetic_energy_total"] = kin_tot
-
+        byproducts["rotation_energy"] = self.rotation_energy(
+            r_H=data["r_H"],
+            r_Cl=data["r_Cl"],
+            v_H=data["v_H"],
+            v_Cl=data["v_Cl"]
+        )
+        byproducts["vibration_energy"] = self.vibration_energy(
+            r_H=data["r_H"],
+            r_Cl=data["r_Cl"],
+            v_H=data["v_H"],
+            v_Cl=data["v_Cl"]
+        )
+        byproducts["translation_energy"] = self.translation_energy(
+            r_H=data["r_H"],
+            r_Cl=data["r_Cl"],
+            v_H=data["v_H"],
+            v_Cl=data["v_Cl"]
+        )
         byproducts["potential_energy"] = self.potential_energy(data["r_rel"])
+        byproducts["total_energy"] = byproducts["kinetic_energy_total"] + byproducts["potential_energy"]
 
         byproducts["temperature"] = self.temperature(
-            kinetic_energy=kin_tot,
+            energy=byproducts["total_energy"],
             temp_window=temp_window
         )
-        v_rel = data['v_H'] - data['v_Cl']
-        r_rel = data['r_H'] - data['r_Cl']
-        L_components = np.cross(r_rel, v_rel, axisa=1, axisb=1)
-        #J = np.sum(L_components**2, axis=1)
-        #byproducts['L_components'] = L_components
-        #byproducts['J'] = J
-        #byproducts['rotational_energy'] = 0.5 * J / self.inertia(r_rel=np.sum(r_rel**2, axis=1)**0.5)
-        
-        #r_cm = self.qt_to_COM(data["r_H"], data["r_Cl"])
-        #v_cm = self.qt_to_COM(data["v_H"], data["v_Cl"])
-        #r_rel_H = data['r_H'] - r_cm
-        #r_rel_Cl = data['r_Cl'] - r_cm
-        #v_rel_H = data['v_H'] - v_cm
-        #v_rel_Cl = data['v_Cl'] - v_cm
-
-        #L_H = self.angular_velocity(r_rel=r_rel_H, v_rel=v_rel_H) * self.m_H
-        #L_Cl = self.angular_velocity(r_rel=r_rel_Cl, v_rel=v_rel_Cl) * self.m_Cl
-        #L_tot = L_H + L_Cl
-        #Inertia = self.inertia(r_rel=data['r_rel'])
-        #rotational_energy = 0.5
 
         return byproducts
 
@@ -265,19 +267,22 @@ class Langevin3D():
     @classmethod
     def load_from_file(cls, filename):
         data = np.load(filename)
+        data_dict = {k: data[k] for k in data.files}
+        run_opt = pd.read_json(Path(filename).with_suffix('.json')).to_dict()
+        cls_data = {**data_dict, **run_opt['constants']}
         ## data has more keys than the __init__ parameters
         init_params = cls.__init__.__code__.co_varnames
-        instance_data = {k: data[k] for k in data.files if k in init_params}
+        instance_data = {k: cls_data[k] for k in cls_data.keys() if k in init_params}
         instance = cls(**instance_data)
 
         return instance, data
 
-    def temperature(self, kinetic_energy, temp_window):
-        temp = (2/3) * kinetic_energy / self.k_B
+    def temperature(self, energy, temp_window):
+        temp = (2/7) * energy / self.k_B
         if temp_window is not None:
             if temp_window % 2 == 0:
                 temp_window += 1
-            temp = pd.Series(temp).rolling(window=temp_window, center=True, min_periods=1).mean().to_numpy()
+            temp = pd.Series(temp).rolling(window=temp_window, min_periods=1).mean().to_numpy()
         return temp
     
     @staticmethod
@@ -297,17 +302,95 @@ class Langevin3D():
     def rotation_energy(self, r_H, r_Cl, v_H, v_Cl):
         L_components = self.mu * np.cross(r_H - r_Cl, v_H - v_Cl, axisa=1, axisb=1)
         J = np.sum(L_components**2, axis=1)
-        rot_e = 0.5 * J / (self.mu * np.sqrt(np.sum(r_H - r_Cl, axis=1)**2))
+        rot_e = 0.5 * J / (self.mu * np.sum((r_H - r_Cl)**2, axis=1))
         return rot_e
     
     def vibration_energy(self, r_H, r_Cl, v_H, v_Cl):
         dots = []
         for i in range(len(r_H)):
             dots.append(np.dot(v_H[i] - v_Cl[i], r_H[i] - r_Cl[i]))
-        vib_e = 0.5 * self.mu * (np.array(dots) ** 2) / (np.sum((r_H - r_Cl), axis=1) ** 2)
+        vib_e = 0.5 * self.mu * (np.array(dots) ** 2) / (np.sum((r_H - r_Cl)** 2, axis=1))
         return vib_e
     
     def translation_energy(self, r_H, r_Cl, v_H, v_Cl):
         v_cm = (self.m_H * v_H + self.m_Cl * v_Cl) / (self.m_H + self.m_Cl)
         transl_e = 0.5 * (self.m_H + self.m_Cl) * np.sum(v_cm**2, axis=1)
         return transl_e
+    
+def crosscorr_fft(x, y, maxlag=None):
+    """
+    Cross-correlation via FFT (positive lags only: y after x).
+    x, y : 1D arrays, same length N
+    Returns:
+      lags (samples, 0..maxlag),
+      rho (normalized cross-correlation for those lags)
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    assert x.shape == y.shape, "x and y must have same shape"
+    N = x.size
+    x -= x.mean()
+    y -= y.mean()
+    if maxlag is None:
+        maxlag = N-1
+    maxlag = min(maxlag, N-1)
+
+    nfft = 1 << (2*N-1).bit_length()   # power of two >= 2*N
+    fx = np.fft.rfft(x, nfft)
+    fy = np.fft.rfft(y, nfft)
+    Sxy = fx * np.conjugate(fy)
+    cc_full = np.fft.irfft(Sxy, nfft)
+    
+    # cc_full[k] approximates sum_n x[n]*y[n+k] (with circular conv)
+    cc = cc_full[:N] / (np.arange(N, 0, -1))  # divide by (N-k) to be unbiased-ish
+    cc = cc[:maxlag+1]
+    # normalize by stds (population std)
+    denom = np.std(x, ddof=0) * np.std(y, ddof=0)
+    rho = cc / denom
+    lags = np.arange(0, maxlag+1, dtype=int)
+    return lags, rho
+
+def find_peak_lag(lags, rho, dt):
+    """
+    Find lag (in seconds) of the maximum correlation and its value.
+    """
+    k = np.argmax(rho)
+    return lags[k], rho[k], k*dt
+
+def block_bootstrap_crosscorr(x, y, dt, block_size_seconds=0.1, nboot=500, maxlag_seconds=None):
+    """
+    Block bootstrap to get 95% CI on cross-correlation curve.
+    x, y : arrays
+    block_size_seconds : block size for bootstrap (choose ~correlation time or a fraction)
+    nboot : number of bootstrap samples
+    Returns:
+       lags_seconds, rho_mean, lower95, upper95
+    """
+    N = len(x)
+    block_size = max(1, int(round(block_size_seconds / dt)))
+    nblocks = int(np.ceil(N / block_size))
+    maxlag = None
+    if maxlag_seconds is not None:
+        maxlag = int(round(maxlag_seconds / dt))
+    lags, rho0 = crosscorr_fft(x, y, maxlag=maxlag)
+    R = np.zeros((nboot, len(lags)))
+    for i in range(nboot):
+        starts = np.random.randint(0, N - block_size + 1, size=nblocks)
+        xb = np.concatenate([x[s:s+block_size] for s in starts])[:N]
+        yb = np.concatenate([y[s:s+block_size] for s in starts])[:N]
+        _, rboot = crosscorr_fft(xb, yb, maxlag=len(lags)-1)
+        R[i] = rboot
+    lower = np.percentile(R, 2.5, axis=0)
+    upper = np.percentile(R, 97.5, axis=0)
+    return lags * dt, rho0, lower, upper
+
+def coherence_spectrum(x, y, fs, nperseg=None):
+    """
+    Compute magnitude-squared coherence between x and y.
+    fs : sampling frequency (1/dt)
+    Returns f, Cxy(f)
+    """
+    if nperseg is None:
+        nperseg = min(1024, len(x)//8)
+    f, Cxy = signal.coherence(x, y, fs=fs, nperseg=nperseg)
+    return f, Cxy

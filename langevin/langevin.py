@@ -277,8 +277,8 @@ class Langevin3D():
 
         return instance, data
 
-    def temperature(self, energy, temp_window):
-        temp = (2/7) * energy / self.k_B
+    def temperature(self, energy, temp_window, dof=7):
+        temp = (2/dof) * energy / self.k_B
         if temp_window is not None:
             if temp_window % 2 == 0:
                 temp_window += 1

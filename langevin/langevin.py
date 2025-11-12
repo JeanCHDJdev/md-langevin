@@ -127,6 +127,7 @@ class Langevin3D():
             "r_init": r_init,
             "v_init": v_init,
             "T_init": T_init,
+            "dt": self.dt,
             "constants": { 
                 "temp_window": temp_window,
                 "steps" : n_steps,
